@@ -81,6 +81,27 @@ suite('SessionsChatAccessibilityHelp', () => {
 		}, { screenReaderDefault: true, explicitChoices: true, settingsLink: true, persistentNotification: true, returnAction: true, dismiss: true });
 	});
 
+	test('documents keyboard character selection and distinguishes Replacement from Blobby', () => {
+		const instantiation = store.add(new TestInstantiationService());
+		const configuration = new TestConfigurationService();
+		store.add(configuration.onDidChangeConfigurationEmitter);
+		instantiation.stub(IConfigurationService, configuration);
+		stubContextKeyService(instantiation, configuration);
+		instantiation.stub(ISessionsPartService, new class extends mock<ISessionsPartService>() { }());
+		instantiation.stub(ISessionsService, new class extends mock<ISessionsService>() { }());
+		instantiation.stub(IAgentHostFilterService, { selectedHost: undefined });
+		instantiation.stub(IWorkbenchLayoutService, { mainContainer: mainWindow.document.createElement('div') });
+		instantiation.stub(ISessionsHostLayoutService, {});
+		const content = store.add(new SessionsChatAccessibilityHelp().getProvider(instantiation)).provideContent();
+
+		assert.deepStrictEqual({
+			keyboardSelection: content.includes('Run Chat: Select Pet Character from the Command Palette<keybinding:workbench.action.showCommands>'),
+			replacementLimits: content.includes('Replacement is a stationary placeholder without interactions, hats, or color controls'),
+			requestPoses: content.includes('an idle pose when no request is in progress, including while awaiting confirmation') && content.includes('a working pose during an active request in the displayed chat'),
+			blobbyInteractionsQualified: content.includes('When Blobby is selected, drag it horizontally') && content.includes('When Blobby is selected and an image-generation tool is running'),
+		}, { keyboardSelection: true, replacementLimits: true, requestPoses: true, blobbyInteractionsQualified: true });
+	});
+
 	test('defers to webview Find help while the Find input is focused', () => {
 		const configuration = new TestConfigurationService();
 		store.add(configuration.onDidChangeConfigurationEmitter);

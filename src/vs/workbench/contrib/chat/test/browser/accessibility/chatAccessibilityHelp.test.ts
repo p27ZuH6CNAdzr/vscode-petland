@@ -788,6 +788,28 @@ suite('Chat Accessibility Help', () => {
 		});
 	});
 
+	test('distinguishes Agents-window character behavior without changing editor pet help', () => {
+		const keybindingService = new MockKeybindingService();
+		const editorHelp = getAccessibilityHelpText('agentView', keybindingService, true);
+		const agentsHelp = getAccessibilityHelpText('agentView', keybindingService, true, true);
+
+		assert.deepStrictEqual({
+			editorHelp: {
+				blobbyInteractions: editorHelp.includes('Type /vscode-pet to show or hide Blobby') && editorHelp.includes('Drag it around the chat with the mouse'),
+				noSelectionPrompt: !editorHelp.includes('When Blobby is selected:'),
+			},
+			agentsHelp: {
+				characterCommand: agentsHelp.includes('Run Chat: Select Pet Character from the Command Palette<keybinding:workbench.action.showCommands>'),
+				replacementLimits: agentsHelp.includes('Replacement is a stationary placeholder without interactions, hats, or color controls'),
+				requestPoses: agentsHelp.includes('an idle pose when no request is in progress, including while awaiting confirmation') && agentsHelp.includes('a working pose during an active request in the displayed chat'),
+				blobbyInteractionsQualified: agentsHelp.includes('When Blobby is selected: Drag it around the chat with the mouse') && agentsHelp.includes('These appearance controls change Blobby, not Replacement'),
+			},
+		}, {
+			editorHelp: { blobbyInteractions: true, noSelectionPrompt: true },
+			agentsHelp: { characterCommand: true, replacementLimits: true, requestPoses: true, blobbyInteractionsQualified: true },
+		});
+	});
+
 	test('describes selection side chats in both windows', () => {
 		const keybindingService = new MockKeybindingService();
 

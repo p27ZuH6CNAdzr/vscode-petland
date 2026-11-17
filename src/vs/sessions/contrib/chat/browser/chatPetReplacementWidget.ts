@@ -17,6 +17,8 @@ import { IHostService } from '../../../../workbench/services/host/browser/host.j
 
 const displaySize = 48;
 
+type ChatPetReplacementPose = 'idle' | 'working';
+
 export class ChatPetReplacementWidget extends Disposable {
 	private readonly overlay = dom.$('.chat-pet-overlay');
 	private readonly image = dom.$<HTMLImageElement>('img.chat-pet-replacement');
@@ -24,6 +26,7 @@ export class ChatPetReplacementWidget extends Disposable {
 	private readonly resizeObserver;
 	private visible = false;
 	private loaded = false;
+	private pose: ChatPetReplacementPose | undefined;
 
 	constructor(
 		private host: IChatPetWidgetHost,
@@ -61,7 +64,6 @@ export class ChatPetReplacementWidget extends Disposable {
 			this.visible = chatPetService.enabled.read(reader) && ownership.active.read(reader) && !hidden.read(reader);
 			this.layout();
 		}));
-		this.image.src = FileAccess.asBrowserUri('vs/sessions/contrib/chat/browser/media/chatPetReplacement/idle.png').toString(true);
 	}
 
 	setHost(host: IChatPetWidgetHost): void {
@@ -75,7 +77,19 @@ export class ChatPetReplacementWidget extends Disposable {
 		this.hostStore.add(this.resizeObserver.observe(host.dragBounds));
 		this.hostStore.add(this.resizeObserver.observe(host.movementBounds));
 		this.hostStore.add(host.onDidChangePlatform(() => this.layout()));
+		this.hostStore.add(autorun(reader => {
+			const requestInProgress = host.model.read(reader)?.requestInProgress.read(reader) ?? false;
+			this.setPose(requestInProgress ? 'working' : 'idle');
+		}));
 		this.layout();
+	}
+
+	private setPose(pose: ChatPetReplacementPose): void {
+		if (this.pose === pose) {
+			return;
+		}
+		this.pose = pose;
+		this.image.src = FileAccess.asBrowserUri(`vs/sessions/contrib/chat/browser/media/chatPetReplacement/${pose}.png`).toString(true);
 	}
 
 	private layout(): void {

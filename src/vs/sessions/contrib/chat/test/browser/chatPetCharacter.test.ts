@@ -11,7 +11,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { FileAccess, Schemas } from '../../../../../base/common/network.js';
-import { constObservable, observableValue } from '../../../../../base/common/observable.js';
+import { constObservable, IObservable, observableValue } from '../../../../../base/common/observable.js';
 import { mock } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
@@ -20,6 +20,7 @@ import { IQuickInputService, IQuickPickItem } from '../../../../../platform/quic
 import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IChatPetService } from '../../../../../workbench/contrib/chat/browser/chatPetService.js';
 import { IChatPetWidgetHost } from '../../../../../workbench/contrib/chat/browser/widget/chatPetWidget.js';
+import { IChatModel } from '../../../../../workbench/contrib/chat/common/model/chatModel.js';
 import { IChatEntitlementService } from '../../../../../workbench/services/chat/common/chatEntitlementService.js';
 import { IWorkbenchEnvironmentService } from '../../../../../workbench/services/environment/common/environmentService.js';
 import { IHostService } from '../../../../../workbench/services/host/browser/host.js';
@@ -38,12 +39,12 @@ suite('Sessions - Chat Pet Character', () => {
 	});
 	teardown(() => sinon.restore());
 
-	function createHost(parent = dom.$('div')): IChatPetWidgetHost {
+	function createHost(parent = dom.$('div'), model: IObservable<IChatModel | undefined> = constObservable(undefined)): IChatPetWidgetHost {
 		return {
 			parent,
 			dragBounds: parent,
 			movementBounds: parent,
-			model: constObservable(undefined),
+			model,
 			hasInput: constObservable(false),
 			inputChanged: Event.None,
 			getPlatformTop: () => undefined,
@@ -163,6 +164,81 @@ suite('Sessions - Chat Pet Character', () => {
 		await selection;
 
 		assert.deepStrictEqual({ picks, character: service.character.get(), called: pick.calledOnce }, { picks: 1, character: 'blobby', called: true });
+	});
+
+	test('maps the displayed chat request state to idle and working poses', async () => {
+		const root = dom.$('div');
+		root.style.cssText = 'position:fixed;left:0;top:0;width:800px;height:600px';
+		const first = dom.append(root, dom.$('div'));
+		first.style.cssText = 'position:absolute;left:100px;top:200px;width:400px;height:80px';
+		const second = dom.append(root, dom.$('div'));
+		second.style.cssText = 'position:absolute;left:200px;top:400px;width:200px;height:80px';
+		mainWindow.document.body.append(root);
+		disposables.add(toDisposable(() => root.remove()));
+
+		const firstRequest = observableValue(disposables, true);
+		const firstChat = new class extends mock<IChatModel>() {
+			override readonly requestInProgress = firstRequest;
+		}();
+		const displayedChat = observableValue<IChatModel | undefined>(disposables, firstChat);
+		const nextRequest = observableValue(disposables, true);
+		const nextChat = new class extends mock<IChatModel>() {
+			override readonly requestInProgress = nextRequest;
+		}();
+		const hostRequest = observableValue(disposables, false);
+		const hostChat = new class extends mock<IChatModel>() {
+			override readonly requestInProgress = hostRequest;
+		}();
+		const nextHostChat = observableValue<IChatModel | undefined>(disposables, hostChat);
+		const enabled = observableValue(disposables, true);
+		const activeWindow = disposables.add(new Emitter<number>());
+		const entitlement = new TestChatEntitlementService();
+		class TestResizeObserver implements ResizeObserver {
+			constructor(_callback: ResizeObserverCallback) { }
+			observe(): void { }
+			unobserve(): void { }
+			disconnect(): void { }
+		}
+		const widget = disposables.add(new ChatPetReplacementWidget(
+			createHost(first, displayedChat),
+			TestResizeObserver,
+			new class extends mock<IChatPetService>() { override readonly enabled = enabled; }(),
+			entitlement,
+			new class extends mock<IHostService>() { override readonly onDidChangeActiveWindow = activeWindow.event; }(),
+			new NullLogService(),
+		));
+		const image = first.querySelector<HTMLImageElement>('img.chat-pet-replacement')!;
+		await image.decode();
+		image.dispatchEvent(new mainWindow.Event('load'));
+		const workingSource = image.getAttribute('src');
+		displayedChat.set(nextChat, undefined);
+		const workingAfterChatChange = image.getAttribute('src');
+		nextRequest.set(false, undefined);
+		const idleAfterConfirmation = image.getAttribute('src');
+		widget.setHost(createHost(second, nextHostChat));
+		const idleAfterHostChange = image.getAttribute('src');
+		nextRequest.set(true, undefined);
+		firstRequest.set(false, undefined);
+		const unchangedByPreviousHost = image.getAttribute('src');
+		hostRequest.set(true, undefined);
+		const workingOnNewHost = image.getAttribute('src');
+		widget.dispose();
+
+		assert.deepStrictEqual({
+			workingSource,
+			workingAfterChatChange,
+			idleAfterConfirmation,
+			idleAfterHostChange,
+			unchangedByPreviousHost,
+			workingOnNewHost,
+		}, {
+			workingSource: FileAccess.asBrowserUri('vs/sessions/contrib/chat/browser/media/chatPetReplacement/working.png').toString(true),
+			workingAfterChatChange: FileAccess.asBrowserUri('vs/sessions/contrib/chat/browser/media/chatPetReplacement/working.png').toString(true),
+			idleAfterConfirmation: FileAccess.asBrowserUri('vs/sessions/contrib/chat/browser/media/chatPetReplacement/idle.png').toString(true),
+			idleAfterHostChange: FileAccess.asBrowserUri('vs/sessions/contrib/chat/browser/media/chatPetReplacement/idle.png').toString(true),
+			unchangedByPreviousHost: FileAccess.asBrowserUri('vs/sessions/contrib/chat/browser/media/chatPetReplacement/idle.png').toString(true),
+			workingOnNewHost: FileAccess.asBrowserUri('vs/sessions/contrib/chat/browser/media/chatPetReplacement/working.png').toString(true),
+		});
 	});
 
 	test('renders a noninteractive placeholder at the perch and cleans up host changes, visibility, and disposal', async () => {
