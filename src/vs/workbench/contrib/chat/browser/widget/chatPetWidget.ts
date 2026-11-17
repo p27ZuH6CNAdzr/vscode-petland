@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import './media/chatPet.css';
-import { BroadcastDataChannel } from '../../../../../base/browser/broadcast.js';
 import * as dom from '../../../../../base/browser/dom.js';
 import { GlobalPointerMoveMonitor } from '../../../../../base/browser/globalPointerMoveMonitor.js';
 import { StandardKeyboardEvent } from '../../../../../base/browser/keyboardEvent.js';
@@ -35,6 +34,9 @@ import { drawChatPetComposite, drawChatPetEyeAccessory, drawChatPetPropeller, ge
 import { getChatPetAccessoryRigFrame, getChatPetReducedMotionRigFrame } from './chatPetAccessoryRig.js';
 import { isImageGenerationToolInProgress } from './chatContentParts/toolInvocationParts/chatToolPartUtilities.js';
 import { ChatPetJumpGame, ChatPetJumpGameRetry } from './chatPetJumpGame.js';
+import { ChatPetWindowOwnership } from './chatPetWindowOwnership.js';
+
+export { CHAT_PET_WINDOW_OWNERSHIP_CHANNEL, isChatPetWindowActive, shouldClaimChatPetWindowOnConstruction } from './chatPetWindowOwnership.js';
 
 export type ChatPetState = 'idle' | 'sleep' | 'waking' | 'typing' | 'rendering' | 'painting' | 'achievementUnlocked' | 'buttonPress' | 'complete' | 'love' | 'clapping' | 'jump' | 'cool' | 'yapping' | 'yappingMouthOpen' | 'sing' | 'speechless' | 'worry' | 'dizzy' | 'falling' | 'wallImpact' | 'splat';
 export type ChatPetClickInteraction = Extract<ChatPetState, 'buttonPress' | 'complete' | 'love' | 'cool' | 'yapping' | 'sing' | 'speechless' | 'worry'>;
@@ -94,7 +96,6 @@ export const CHAT_PET_WALL_IMPACT_DURATION = 48;
 export const CHAT_PET_MOUSE_BOUNCE_RELEASE_GRACE_DURATION = 500;
 export const CHAT_PET_BOUNCE_RESULT_DURATION = 5_000;
 export const CHAT_PET_CONFETTI_SCORE = 20;
-export const CHAT_PET_WINDOW_OWNERSHIP_CHANNEL = 'vscode-chat-pet-window-ownership';
 const TRANSIENT_STATE_DURATION = 2_000;
 const COMPLETE_STATE_DURATION = 960;
 const BUTTON_PRESS_STATE_DURATION = 2_850;
@@ -575,14 +576,6 @@ export function getChatPetListPadding(enabled: boolean, visible: boolean, scale:
 
 export function isChatPetVisible(enabled: boolean, windowActive = true): boolean {
 	return enabled && windowActive;
-}
-
-export function isChatPetWindowActive(activeWindowId: number, targetWindowId: number): boolean {
-	return activeWindowId === targetWindowId;
-}
-
-export function shouldClaimChatPetWindowOnConstruction(windowActive: boolean, documentFocused: boolean): boolean {
-	return windowActive && documentFocused;
 }
 
 export function isChatPetKeyboardInteractionEnabled(enabled: boolean, isDead: boolean, hasPointerInteraction: boolean, isAirborne: boolean): boolean {
@@ -1668,27 +1661,7 @@ export class ChatPetWidget extends Disposable {
 
 		const motionReduced = observableFromEvent(this, this.accessibilityService.onDidChangeReducedMotion, () => this.accessibilityService.isMotionReduced());
 		const targetWindow = dom.getWindow(this._button.element);
-		const targetWindowId = dom.getWindowId(targetWindow);
-		const windowActive = observableValue(this, isChatPetWindowActive(dom.getWindowId(dom.getActiveWindow()), targetWindowId));
-		const ownershipChannel = this._register(new BroadcastDataChannel<{ readonly windowId: number }>(CHAT_PET_WINDOW_OWNERSHIP_CHANNEL));
-		this._register(ownershipChannel.onDidReceiveData(({ windowId }) => {
-			windowActive.set(isChatPetWindowActive(windowId, targetWindowId), undefined);
-		}));
-		const claimWindowOwnership = () => {
-			windowActive.set(true, undefined);
-			ownershipChannel.postData({ windowId: targetWindowId });
-		};
-		this._register(dom.addDisposableListener(targetWindow, dom.EventType.FOCUS, claimWindowOwnership));
-		this._register(this.hostService.onDidChangeActiveWindow(windowId => {
-			if (isChatPetWindowActive(windowId, targetWindowId)) {
-				claimWindowOwnership();
-			} else {
-				windowActive.set(false, undefined);
-			}
-		}));
-		if (shouldClaimChatPetWindowOnConstruction(windowActive.get(), targetWindow.document.hasFocus())) {
-			claimWindowOwnership();
-		}
+		const windowActive = this._register(new ChatPetWindowOwnership(targetWindow, this.hostService)).active;
 		this._register(autorun(reader => {
 			const wasMotionReduced = this._motionReduced;
 			this._motionReduced = motionReduced.read(reader);

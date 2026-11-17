@@ -24,7 +24,7 @@ export interface IChatPetWidgetService {
 	getFocusedJumpGame(): ChatPetJumpGame | undefined;
 }
 
-interface IChatPetWidgetInstance extends IDisposable {
+export interface IChatPetWidgetInstance extends IDisposable {
 	setHost(host: IChatPetWidgetHost): void;
 	readonly jumpGame?: ChatPetJumpGame;
 }

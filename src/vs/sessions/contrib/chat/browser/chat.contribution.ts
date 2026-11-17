@@ -23,6 +23,7 @@ import './newSessionOnboardingTargets.js';
 import './newSessionPickerTryout.js';
 import './agentHostDelegation.js';
 import './newSessionFolderQuickPickAction.js';
+import './chatPetCharacter.contribution.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { INewSessionComposerService, NewSessionComposerService } from '../../../../workbench/contrib/sessions/browser/newSessionComposerService.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
