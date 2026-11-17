@@ -15,7 +15,7 @@ The MVP succeeds when a user can select the replacement at runtime, send a chat 
 | Area | MVP decision |
 | --- | --- |
 | Surface | Agents window only; editor-window Blobby is unchanged |
-| Artwork | Two transparent placeholder PNGs: idle and working |
+| Artwork | Two static transparent 96-by-96 PNGs: idle and working |
 | Motion | None |
 | Position | Stationary at the existing chat-input perch |
 | Selection | Runtime choice between Blobby and Replacement |
@@ -23,7 +23,7 @@ The MVP succeeds when a user can select the replacement at runtime, send a chat 
 | Default | Blobby |
 | Integration | Observe the displayed chat's existing request state |
 
-Final character design is deferred. Replacing the two placeholder images with final artwork of the same dimensions must not require behavior changes.
+The replacement uses an original, procedurally drawn clockwork owl. Replacing either image with artwork of the same dimensions must not require behavior changes.
 
 ## Behavior contract
 
@@ -215,3 +215,17 @@ Agents-window accessibility help now documents keyboard character selection, the
 
 - Verify actual editor/Agents window ownership handoff, chat switching, screen-reader announcements, and the complete two-pose flow in a signed-in session. Current host and visibility coverage includes focused tests, not a live multi-window session.
 - Rebuild any separately packaged application before expecting it to contain these source changes.
+
+## Artwork follow-up
+
+The robot placeholder has been replaced with an original teal-and-copper clockwork owl, generated with Pillow. The idle pose has open eyes and a brass chest detail. The working pose lowers its brow and holds a bright task panel, distinguishing the poses by shape as well as color. Both are static art, not animations.
+
+Both transparent sprites remain 96-by-96 and display at 48-by-48. They share the same silhouette and bottom anchor, use solid 8-by-8 logical pixels, and contain no antialiased or partial-alpha pixels. Existing request-state behavior, decorative accessibility semantics, and character selection are unchanged.
+
+### Validation results
+
+- Pillow checks passed for exact dimensions, binary transparency, matching alpha masks and bottom anchors, distinct poses, and uniform 8-by-8 logical-pixel blocks.
+- Both poses were reviewed at enlarged and actual display sizes on light and dark backgrounds.
+- `pnpm run build-fast --client-only` — passed.
+- `./scripts/test.sh --run src/vs/sessions/contrib/chat/test/browser/chatPetCharacter.test.ts --run src/vs/workbench/contrib/chat/test/browser/widget/chatPetWidget.test.ts --reporter dot` — passed, 184 passing and 1 pending. VS Code test discovery did not expose either suite, so validation used the repository's Electron test runner.
+- The new artwork has not been verified in a live Agents window.
