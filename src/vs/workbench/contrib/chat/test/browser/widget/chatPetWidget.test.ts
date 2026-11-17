@@ -2122,6 +2122,65 @@ suite('ChatPetWidget', () => {
 		});
 	});
 
+	test('disables growing the pet at its maximum size', async () => {
+		const parent = mainWindow.document.createElement('div');
+		const dragBounds = mainWindow.document.createElement('div');
+		const movementBounds = mainWindow.document.createElement('div');
+		mainWindow.document.body.append(parent, dragBounds, movementBounds);
+		disposables.add(toDisposable(() => {
+			parent.remove();
+			dragBounds.remove();
+			movementBounds.remove();
+		}));
+		let contextMenuDelegate: IContextMenuDelegate | undefined;
+		const contextMenuService = new class extends mock<IContextMenuService>() {
+			override showContextMenu(delegate: IContextMenuDelegate): void {
+				contextMenuDelegate = delegate;
+			}
+		}();
+		const service = disposables.add(new ChatPetService(disposables.add(new TestStorageService()), new TestTelemetryService(), new NullLogService(), editorWindowEnvironment));
+		service.toggle();
+		service.setScale(3);
+		disposables.add(new ChatPetWidget(
+			createPetHost(parent, dragBounds, movementBounds),
+			undefined,
+			service,
+			new TestAccessibilityService(),
+			contextMenuService,
+			new class extends mock<ICommandService>() { }(),
+			new NullLogService(),
+			new class extends mock<IHostService>() {
+				override readonly hasFocus = true;
+				override readonly onDidChangeFocus = Event.None;
+				override readonly onDidChangeActiveWindow = Event.None;
+			}(),
+			workbenchInstantiationService(undefined, disposables),
+		));
+		const button = parent.getElementsByClassName('chat-pet-button')[0] as HTMLElement;
+
+		button.dispatchEvent(new mainWindow.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		assert.ok(contextMenuDelegate);
+		const growAtMax = contextMenuDelegate.getActions().find(action => action.id === 'chat.pet.grow');
+		assert.ok(growAtMax);
+		const scaleAtMax = service.scale.get();
+		const shrinkAction = contextMenuDelegate.getActions().find(action => action.id === 'chat.pet.shrink');
+		assert.ok(shrinkAction);
+		await shrinkAction.run();
+		button.dispatchEvent(new mainWindow.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		assert.ok(contextMenuDelegate);
+		const growAfterShrinking = contextMenuDelegate.getActions().find(action => action.id === 'chat.pet.grow');
+
+		assert.deepStrictEqual({
+			enabledAtMax: growAtMax.enabled,
+			scaleAtMax,
+			enabledAfterShrinking: growAfterShrinking?.enabled,
+		}, {
+			enabledAtMax: false,
+			scaleAtMax: 3,
+			enabledAfterShrinking: true,
+		});
+	});
+
 	test('hides the pet from its context menu', async () => {
 		const parent = mainWindow.document.createElement('div');
 		mainWindow.document.body.append(parent);
@@ -4453,17 +4512,21 @@ suite('ChatPetWidget', () => {
 		]);
 	});
 
-	test('changes size in twenty-percent steps with only a minimum', () => {
+	test('changes size in twenty-percent steps with a minimum and a maximum', () => {
 		assert.deepStrictEqual([
 			getChatPetScale(1, 0.2),
 			getChatPetScale(1, -0.2),
 			getChatPetScale(0.4, -0.2),
+			getChatPetScale(2.8, 0.2),
+			getChatPetScale(3, 0.2),
 			getChatPetScale(10, 0.2),
 		], [
 			1.2,
 			0.8,
 			0.4,
-			10.2,
+			3,
+			3,
+			3,
 		]);
 	});
 
